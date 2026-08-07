@@ -3,16 +3,27 @@
 ## Copyright (C) 2020 - 2025 ENCRYPTED SUPPORT LLC <adrelanos@whonix.org>
 ## See the file COPYING for copying conditions.
 
-set -e
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
+shopt -s inherit_errexit
+shopt -s shift_verbose
+
+## sets: has
+# shellcheck source=../../../helper-scripts/usr/libexec/helper-scripts/has.sh
+## Sibling repo: absent in an isolated CI checkout.
+# shellcheck disable=SC1091
+source /usr/libexec/helper-scripts/has.sh
 
 if [ ! "$(id -u)" = "0" ]; then
-   echo "$0: ERROR: Needs to run as root. Run:
+   printf '%s\n' "$0: ERROR: Needs to run as root. Run:
 sudo $0" >&2
    exit 1
 fi
 
-if ! type -P gcc >/dev/null ; then
-   echo "$0: ERROR: gcc not installed. To install:
+if ! has gcc ; then
+   printf '%s\n' "$0: ERROR: gcc not installed. To install:
 
    sudo apt update
 
@@ -22,5 +33,5 @@ fi
 
 gcc /usr/share/debug-misc/segfault.c -g -o /usr/bin/segfault-run
 
-echo "$0: SUCCESS. You can now run:"
-echo "segfault-run"
+printf '%s\n' "$0: SUCCESS. You can now run:"
+printf '%s\n' "segfault-run"
