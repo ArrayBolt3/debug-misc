@@ -1,3 +1,251 @@
+commit ca062419f3c2913d74933f67c53af8ff15ca150d
+Merge: 7843a0b 3a6a614
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Wed Aug 19 00:13:35 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/org-ai-assisted/ai'
+
+commit 3a6a614f5ca52a907bfe917e0fc238888d1dfab4
+Author: claude (dev163 38f9745c-aed1-4fb4-b6ae-9899f20f8de2) <noreply@anthropic.com>
+Date:   Sat Aug 8 04:55:25 2026 -0400
+
+    CI: enrol in the pre-push static gate
+
+    This repo had no GitHub Actions workflow at all, so nothing verified its PRs on
+    the server side -- the only gate was ci-repro run locally.
+
+    The workflow file is the canonical consumer template, copied verbatim from
+    developer-meta-files/consumer-templates/.github/workflows/. It is managed: once
+    present, dm-packaging-helper-script's pkg_update_consumer_workflows keeps it in
+    sync, so it must not be hand-edited here.
+
+    Enrolment is deliberately a SEPARATE act from propagation: that function uses
+    pkg_update_if_exists, which only updates a workflow that already exists, and
+    pkg_install_dependabot_yml skips any repo with no .github/workflows/ directory.
+    Neither creates the first one. Hence this commit.
+
+    Scope: the repos this session actually changed and that ship shell code -- not
+    every repo lacking CI. Enrolling a repo consumes shared org-wide Actions
+    concurrency (20 jobs, the real limit; public repos are not minute-billed), so it
+    is worth spending where there is signal.
+
+    Verified BEFORE enrolling: 'ci-repro.sh --worktree' passes for this repo, so the
+    gate arrives green rather than turning someone's PR red on arrival.
+
+    NOTE, so it is not a surprise: creating .github/workflows/ makes this repo
+    eligible for the canonical .github/dependabot.yml on the next propagation pass,
+    which pkg_install_dependabot_yml installs into any repo that uses Actions.
+
+commit e81eae2acdb4048931a85d7e7ce2ad2729e6e8af
+Author: claude (dev163 38f9745c-aed1-4fb4-b6ae-9899f20f8de2) <noreply@anthropic.com>
+Date:   Sat Aug 8 04:43:56 2026 -0400
+
+    grub.d generators: echo -> printf, verified against the emitted output
+
+    The previous commit waived R-034 for these files, on the grounds that the 'echo'
+    calls emit the boot menu and rewriting them was risky churn. That reasoning does
+    not survive having a byte-identical emitted-output test: the test is exactly
+    what makes the rewrite safe. 13 calls converted, the waivers removed.
+
+    The two 422-line vendored GRUB upstream files (10_00_linux_dist,
+    10_50_linux_dist_advanced) keep their echo calls -- they carry the FSF copyright
+    and are GRUB's own 10_linux with patches, excluded from this pass.
+
+    The rewrite broke the boot menu, and the test caught it
+    --------------------------------------------------------
+
+    The mechanical replacement emitted a LITERAL backslash before the quote:
+
+      printf '%s\n' \"\
+      grub-live $0: ERROR: ...
+
+    which makes the '"' an ordinary character, so the argument word-splits and a
+    stray quote lands in the output. The emitted config went from one diagnostic
+    line to 26 fragments, one word per line.
+
+    Nothing about that is visible by reading the diff, and the gate passed it --
+    shellcheck and every R-rule were happy. Only comparing the EMITTED BYTES showed
+    it.
+
+    The test had a hole, which this closes
+    ---------------------------------------
+
+    It captured stdout only. Several generators take an early-exit path whose only
+    output is a diagnostic on fd 2 -- discarding it made them report 'emitted 0
+    bytes', so their conversion was UNVERIFIED. 10_20_linux_live, the very file the
+    breakage was in, was one of them: it was only caught because a DIFFERENT
+    generator's stdout happened to expose the same bug.
+
+    Capturing both streams takes the verified set from 3 of 6 to 5 of 6:
+
+      IDENTICAL  10_05_linux_main                    (85 bytes)
+      IDENTICAL  10_20_linux_live                    (164 bytes)
+      IDENTICAL  10_60_linux_live_advanced           (164 bytes)
+      IDENTICAL  35_uefi-firmware_live-config-dist   (182 bytes)
+      IDENTICAL  45_debugging                        (879 bytes)
+      NOT-EXERCISED  10_55_linux_main_advanced       (emits nothing in this env)
+
+    10_55_linux_main_advanced is still reported as NOT-EXERCISED rather than as a
+    pass. Its conversion is UNVERIFIED by this harness; covering it needs a fixture
+    that reaches its emitting path.
+
+    Testing
+    -------
+
+    Gate exit 0 in an ISOLATED checkout, all five packages.
+    Harness: ~/strict-pass-tests/grub-test/emit.sh
+
+commit 63746cf2aab8a7fff2e0750e1cd3693126cc7cad
+Author: claude (dev163 38f9745c-aed1-4fb4-b6ae-9899f20f8de2) <noreply@anthropic.com>
+Date:   Sat Aug 8 04:11:52 2026 -0400
+
+    grub.d generators: POSIX-sh strict mode ('set -eu')
+
+    R-010's six-directive preamble cannot apply here: pipefail, errtrace,
+    inherit_errexit and shift_verbose are BASH-ONLY. 'set -eu' is everything POSIX
+    sh can express, and it buys the two that matter -- an unhandled failure and an
+    unset variable both stop the script instead of generating a wrong boot entry.
+
+    The '#!/bin/sh' shebangs stay. grub-mkconfig executes these; putting bash on the
+    boot-config path to satisfy a style rule would be a real behavioural change for
+    a cosmetic win. Each file carries a 'style-ok: no-strict' waiver naming the four
+    directives POSIX sh cannot express.
+
+    Two REAL aborts 'set -u' would have introduced, found by running them
+    ---------------------------------------------------------------------
+
+    Both would have produced a broken boot menu, and neither is visible by reading:
+
+    - 35_uefi-firmware sources GRUB's OWN grub-mkconfig_lib, which reads
+      '$grub_probe'. grub-mkconfig sets that as a plain shell variable and NEVER
+      exports it, and generators run as separate processes -- so under 'set -u' the
+      library aborted on its own line 27, taking the UEFI Firmware Settings entry
+      with it. nounset is off around that source only, the same treatment as the
+      Xsession.d snippets and the user drop-ins earlier in this pass: upstream code
+      is not ours to hold to our preamble.
+
+    - 45_debugging reads GRUB_DISABLE_LINUX_UUID and GRUB_DISABLE_LINUX_PARTUUID,
+      which are NOT in grub-mkconfig's export lists. Defaulted. It runs only inside
+      a chroot build, which is exactly where it would have aborted.
+
+    30_serial_console.cfg is NOT given 'set -eu'
+    ---------------------------------------------
+
+    It lives in /etc/default/grub.d/, which grub-mkconfig SOURCES ('. "${x}"' at its
+    line 165), so a 'set' there would rewrite grub-mkconfig's OWN shell for the rest
+    of its run. Its executable bit is misleading; nothing execs it. It gets the
+    no-strict waiver instead, and its three 'echo' diagnostics became printf.
+
+    Waivers, each with its reason in the file
+    ------------------------------------------
+
+    - allow-echo: the 'echo' calls EMIT the grub configuration. They are the output
+      format, several are multi-line continuations whose exact bytes become the boot
+      menu, and rewriting them to printf would churn boot entries for no gain.
+    - SC2034: variables like make_boot_entry are consumed by ANOTHER script, set
+      under 'set -o allexport' and read by 10_00_linux_dist.
+    - SC3043 ('local' is undefined in POSIX sh): true of the standard, not of any
+      shell these run under. Dropping 'local' would make those variables GLOBAL
+      inside a boot generator -- a real regression for a theoretical portability win.
+    - SC2154: grub-mkconfig exports GRUB_DEVICE and friends, and pkgdatadir at its
+      line 37. Verified against /usr/sbin/grub-mkconfig, not assumed -- which is how
+      the two it does NOT export were found and defaulted in code instead.
+    - SC1091: sourced paths resolved at RUN time against the caller's directory.
+
+    Testing
+    -------
+
+    Gate exit 0 in an ISOLATED checkout, all five packages.
+
+    Each generator run under 'sh' with the environment grub-mkconfig actually
+    provides (its own export lists), plus an ischroot stub for the chroot path:
+
+      6 generators, no unset aborts
+
+    And the check that matters for a boot generator -- the EMITTED configuration,
+    byte for byte:
+
+      IDENTICAL  10_05_linux_main                    (85 bytes)
+      IDENTICAL  35_uefi-firmware_live-config-dist   (128 bytes)
+      IDENTICAL  45_debugging                        (457 bytes)
+      NOT-EXERCISED  10_20_linux_live, 10_55_linux_main_advanced, 10_60_linux_live_advanced
+
+    The three NOT-EXERCISED are reported as such, not as passes: they emit nothing
+    in this environment because they exit early, and 'identical empty output' is not
+    evidence. Covering them needs a live-boot fixture.
+
+    Canaries: removing the 'set +u' guard reproduces
+      grub-mkconfig_lib: 27: grub_probe: parameter not set
+    and removing the 45_debugging defaults reproduces
+      45_debugging: 52: GRUB_DISABLE_LINUX_UUID: parameter not set
+
+    Three test defects on the way, each one a case that proved nothing:
+    - 45_debugging exits unless in a chroot, so the loop reported 'ok' for a script
+      it had not run past line 31. An ischroot stub goes on PATH now, and the case
+      fails unless the dump is actually reached.
+    - the first stub used a shell function plus 'export -f' -- a BASHISM, and the
+      script runs under 'sh' as a separate process, so it never took effect and the
+      canary passed with the fix removed.
+    - 'identical' was reported for generators emitting 0 bytes.
+
+    One thing the terminal hid: the emitted-output diff looked identical until it
+    was re-read with 'sandbox run --raw'. The display sanitizer had replaced the
+    '<' in '<unset>', making a real difference invisible. That is why 45_debugging
+    defaults to EMPTY rather than a '<unset>' marker -- the marker changed the
+    emitted text, and on a boot generator byte-identical output is worth more than
+    a nicer debug string.
+
+commit 83b3e9e91b3fb91349581867b44754078e59d737
+Author: claude (dev163 38f9745c-aed1-4fb4-b6ae-9899f20f8de2) <noreply@anthropic.com>
+Date:   Fri Aug 7 13:35:00 2026 -0400
+
+    debug-misc: R-010 strict mode for segfault-build
+
+    usr/sbin/segfault-build refuses to run as non-root, refuses without gcc, and
+    otherwise compiles a deliberately-crashing binary into /usr/bin. Both refusals
+    exist to TELL the user what to do, so both messages matter as much as the exit
+    code.
+
+    No nounset traps. The change is the preamble, R-090 ('type -P gcc' -> 'has
+    gcc', with has.sh sourced), and 4 'echo' -> printf including two multi-line
+    message bodies whose blank lines and indentation are preserved.
+
+    Testing
+    -------
+
+    Gate exit 0 in an ISOLATED checkout.
+
+      4 same, 0 differing
+
+    Four cases: non-root with and without gcc, and AS ROOT both without gcc -- the
+    only way to reach the gcc guard -- and with it.
+
+    Canary: removing the gcc guard gives 3 same, 1 differing, on exactly the
+    'ROOT without gcc' case (exit 1 -> 127): the script tries to compile with no
+    compiler and the user loses the message telling them how to install it.
+
+    TWO HARNESS BUGS FIXED BEFORE THE RESULT COULD BE TRUSTED
+    ------------------------------------------------------------
+
+    Both produced a clean-looking pass that tested nothing:
+
+    1. The "no gcc" fixture did not actually remove gcc -- PATH still reached the
+       real one, so that case exited 0. The no-gcc runs now use a PATH containing
+       ONLY the stub directory, with 'id' linked in explicitly since the script
+       needs it.
+    2. That restricted PATH then broke the runner itself: 'env PATH=<stubs> bash'
+       makes env look up BASH on the new PATH, which does not contain it, so both
+       sides came back 127. The interpreter and timeout are now invoked by absolute
+       path.
+
+    Identical exit codes across cases that should differ is the tell for both.
+
+commit 7843a0bec3feb1845a092143a28af6d0c3e56acb
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sun May 31 20:32:15 2026 +0000
+
+    bumped changelog version
+
 commit 38ffaa799a3131f03001adb165d3066dd348a89e
 Merge: a3bd941 100262d
 Author: Patrick Schleizer <adrelanos@whonix.org>
