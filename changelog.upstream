@@ -1,3 +1,42 @@
+commit 2feb71490e03087449bb2635931cb1d8d24aef16
+Merge: 93a2d25 bfdbd2a
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Sat Aug 22 22:40:30 2026 -0400
+
+    Merge remote-tracking branch 'refs/remotes/org-ai-assisted/ai'
+
+commit bfdbd2a185e91884bc628fb912f9076074f0fde6
+Author: claude (dev272 e8b76afb-795c-4739-8ebd-023de854021e) <noreply@anthropic.com>
+Date:   Fri Aug 21 04:53:53 2026 -0400
+
+    debug-misc: drop narrative/history comments from grub generators
+
+    - Remove the verbose shellcheck-disable rationale and style-ok prose (and
+      any GRUB_DISTRIBUTOR / EMPTY-default history narrative); keep the
+      functional '# shellcheck disable=' lines and '## style-ok:' markers.
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
+commit 93a2d25f4b6b849c85cf02614d0fc5f8d9ceaaeb
+Author: Patrick Schleizer <adrelanos@whonix.org>
+Date:   Fri Aug 21 08:53:37 2026 +0000
+
+    bumped changelog version
+
+commit cbb36b56d907d39025bae8403e7f41a9e001e58a
+Author: claude (dev272 e8b76afb-795c-4739-8ebd-023de854021e) <noreply@anthropic.com>
+Date:   Fri Aug 21 04:27:58 2026 -0400
+
+    debug-misc: source helper-scripts via HELPER_SCRIPTS_PATH, drop SC1091 disable
+
+    - usr/sbin/segfault-build: use source "${HELPER_SCRIPTS_PATH:-}"/usr/libexec/helper-scripts/has.sh;
+      drop the dead '# shellcheck disable=SC1091' and the stale sibling note.
+    - add .github/dm-consumer.yml with dist-ai-tests helper-scripts: true so CI
+      checks out the helper-scripts sibling for shellcheck source following.
+    - completed pre-existing whole-file style debt (R-010: add export LC_ALL=C).
+
+    Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+
 commit ca062419f3c2913d74933f67c53af8ff15ca150d
 Merge: 7843a0b 3a6a614
 Author: Patrick Schleizer <adrelanos@whonix.org>
