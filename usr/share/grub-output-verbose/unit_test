@@ -1,18 +1,22 @@
 #!/bin/sh
 
-set -e
+# shellcheck disable=SC2034,SC3043,SC1091
+
+## style-ok: no-strict
+set -o errexit
+set -o nounset
 
 mydir="$( cd "$( dirname "$0" )" && pwd )"
-cd "$mydir"
+cd "${mydir}"
 cd ..
 cd ..
 cd ..
 
 check_if_removed() {
    grep_exit_code="0"
-   echo "$GRUB_CMDLINE_LINUX_DEFAULT" | grep -w "quiet" || grep_exit_code="$?"
-   if [ "$grep_exit_code" = "0" ]; then
-      echo "$0: 'quiet' not removed from GRUB_CMDLINE_LINUX_DEFAULT!" >&2
+   printf '%s\n' "${GRUB_CMDLINE_LINUX_DEFAULT}" | grep -w "quiet" || grep_exit_code="$?"
+   if [ "${grep_exit_code}" = "0" ]; then
+      printf '%s\n' "$0: 'quiet' not removed from GRUB_CMDLINE_LINUX_DEFAULT!" >&2
       exit 1
    fi
 }
@@ -46,4 +50,4 @@ test_two
 unset GRUB_CMDLINE_LINUX_DEFAULT
 test_two
 
-echo "$0: All tests passed."
+printf '%s\n' "$0: All tests passed."
